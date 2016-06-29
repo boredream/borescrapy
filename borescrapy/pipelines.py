@@ -4,10 +4,12 @@
 # Don't forget to add your pipeline to the ITEM_PIPELINES setting
 # See: http://doc.scrapy.org/en/latest/topics/item-pipeline.html
 
-import json
 import codecs
+import json
 import os
+import sqlite3
 import urllib2
+import types
 
 
 def get_download_video(item, start_video=47):
@@ -24,7 +26,7 @@ def get_download_video(item, start_video=47):
 
     # http://vcntv.dnion.com/flash/mp4video47/TMS/2015/11/13/8d9824f36db5436c93374b4206061489_h264818000nero_aac32-1.mp4
     download_url = 'http://vcntv.dnion.com/flash/mp4video%d/TMS/%s/%s_h264818000nero_aac32-1.mp4' % (
-    start_video, date, video_id)
+        start_video, date, video_id)
 
     file_name = item['date'] + "_" + name + ".mp4"
     file_dir = 'E:/spider_video/ttys/'
@@ -69,15 +71,74 @@ def get_download_video(item, start_video=47):
 
 class JsonWithEncodingPipeline(object):
     def __init__(self):
-        self.file = codecs.open('ttys_items.json', 'w', encoding='utf-8')
+        self.file = codecs.open('data.json', 'w', encoding='utf-8')
 
     def process_item(self, item, spider):
         line = json.dumps(dict(item), ensure_ascii=False) + ",\n"
         self.file.write(line)
-
-        get_download_video(item)
-
         return item
 
     def spider_closed(self, spider):
         self.file.close()
+
+
+class PrintPipeline(object):
+    def process_item(self, item, spider):
+        line = json.dumps(dict(item), ensure_ascii=False) + ",\n"
+        print 'print line = ' + line
+        return item
+
+
+class SqlitePipeline(object):
+    def __init__(self):
+        self.sql = ''
+        self.conn = sqlite3.connect('data.db')
+
+    def close_spider(self, spider):
+        self.conn.close()
+
+    # name = scrapy.Field()
+    # jingLuo = scrapy.Field()
+    # jingLuoIndexDirection = scrapy.Field()
+    # jingLuoIndex = scrapy.Field()
+    # bodyArea = scrapy.Field()
+    # wuShuType = scrapy.Field()
+    # wuShuWuXing = scrapy.Field()
+    # isYuanXueOfJingLuo = scrapy.Field()
+
+    def process_item(self, item, spider):
+        if self.sql == '':
+            # 初始化table
+            self.sql = 'CREATE TABLE DATA (ID INTEGER PRIMARY KEY, '
+            for (key, value) in dict(item).items():
+                # if isinstance(type(value), types.IntType):
+                #     self.sql += (key + ' INTEGER, ')
+                # elif isinstance(type(value), types.BooleanType):
+                #     # boolean 用 int 型
+                #     self.sql += (key + ' INTEGER, ')
+                # else:
+                #     self.sql += (key + ' TEXT,')
+
+                self.sql += (key + ' TEXT,')
+
+                print type(value)
+            self.sql += ');'
+            self.sql = self.sql.replace(',);', ');')
+
+            print '------------- create Table = ' + self.sql
+
+            self.conn.execute(self.sql)
+            self.conn.commit()
+
+        keys = ''
+        values = ''
+        for (key, value) in dict(item).items():
+            keys += (', ' + key)
+            values += (', \'' + value + '\'')
+
+        insertSql = 'INSERT INTO DATA (' + keys[2:] + ') VALUES (' + values[2:] + ')'
+
+        self.conn.execute(insertSql)
+        self.conn.commit()
+
+        return item
